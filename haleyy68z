@@ -1,0 +1,159 @@
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local lp = Players.LocalPlayer
+local pGui = lp:WaitForChild("PlayerGui")
+
+-- Variables d'état
+local isEnabled = false
+local lastTrigger = 0
+local COOLDOWN_TIME = 20 -- 20 secondes avant de pouvoir réagir à nouveau
+
+-- ===================== FONCTIONS CORE =====================
+
+local function sendMsg(msg)
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if channel then channel:SendAsync(msg) end
+    else
+        local remote = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
+        if remote then remote:FireServer(msg, "All") end
+    end
+end
+
+local function getThiefName()
+    local closestDist = 50
+    local thief = nil
+    if not lp.Character or not lp.Character:FindFirstChild("HumanoidRootPart") then return nil end
+    local myPos = lp.Character.HumanoidRootPart.Position
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+            if dist < closestDist then
+                closestDist = dist
+                thief = p
+            end
+        end
+    end
+    return thief and thief.Name or nil
+end
+
+-- ===================== CRÉATION DE L'INTERFACE =====================
+
+if pGui:FindFirstChild("BaseProtectorHaleyyFinal") then pGui.BaseProtectorHaleyyFinal:Destroy() end
+
+local sg = Instance.new("ScreenGui")
+sg.Name = "BaseProtectorHaleyyFinal"
+sg.ResetOnSpawn = false
+sg.Parent = pGui
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0, 190, 0, 115)
+main.Position = UDim2.new(0.5, -95, 0.4, 0)
+main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+main.BackgroundTransparency = 0.3
+main.BorderSizePixel = 0
+main.Active = true
+main.Parent = sg
+
+-- Contour Rouge
+local stroke = Instance.new("UIStroke", main)
+stroke.Color = Color3.fromRGB(255, 0, 0)
+stroke.Thickness = 1.8
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 25)
+title.Position = UDim2.new(0, 0, 0, 5)
+title.BackgroundTransparency = 1
+title.Text = "BASE PROTECTOR"
+title.TextColor3 = Color3.fromRGB(255, 0, 0)
+title.TextSize = 13
+title.Font = Enum.Font.GothamBlack
+title.Parent = main
+
+local credit = Instance.new("TextLabel")
+credit.Size = UDim2.new(1, 0, 0, 15)
+credit.Position = UDim2.new(0, 0, 0, 25)
+credit.BackgroundTransparency = 1
+credit.Text = "by haleyy68z"
+credit.TextColor3 = Color3.fromRGB(200, 0, 0)
+credit.TextSize = 9
+credit.Font = Enum.Font.GothamMedium
+credit.Parent = main
+
+local btn = Instance.new("TextButton")
+btn.Size = UDim2.new(0.8, 0, 0, 30)
+btn.Position = UDim2.new(0.1, 0, 0, 48)
+btn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+btn.BackgroundTransparency = 0.2
+btn.Text = "OFF"
+btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+btn.Font = Enum.Font.GothamBlack
+btn.TextSize = 15
+btn.Parent = main
+Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+local discordLink = Instance.new("TextLabel")
+discordLink.Size = UDim2.new(1, 0, 0, 20)
+discordLink.Position = UDim2.new(0, 0, 1, -22)
+discordLink.BackgroundTransparency = 1
+discordLink.Text = "discord.gg/4pjvkzBs"
+discordLink.TextColor3 = Color3.fromRGB(150, 150, 150)
+discordLink.TextSize = 9
+discordLink.Font = Enum.Font.GothamBold
+discordLink.Parent = main
+
+-- ===================== FIX SYSTÈME DE DRAG (DEPLACEMENT) =====================
+
+local dragging, dragInput, dragStart, startPos
+main.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true; dragStart = input.Position; startPos = main.Position
+		input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+	end
+end)
+main.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+
+-- ===================== LOGIQUE ON/OFF =====================
+
+btn.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    btn.Text = isEnabled and "ON" or "OFF"
+    btn.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 180, 50) or Color3.fromRGB(150, 0, 0)
+end)
+
+-- ===================== DÉTECTION FLASH (SANS PAUSE) =====================
+
+RunService.Heartbeat:Connect(function()
+    if isEnabled and (tick() - lastTrigger >= COOLDOWN_TIME) then
+        -- Scan ultra rapide
+        for _, v in ipairs(pGui:GetDescendants()) do
+            if v:IsA("TextLabel") and v.Visible then
+                if v.Text:find("is stealing") or v.Text:find("Someone is stealing") then
+                    local target = getThiefName()
+                    if target then
+                        lastTrigger = tick() -- On active le cooldown de 20s
+                        sendMsg(":balloon " .. target)
+                        break
+                    end
+                end
+            end
+        end
+    end
+end)
+
+print("Base Protector v3 FINAL chargé. Cooldown 20s & Draggable.")
